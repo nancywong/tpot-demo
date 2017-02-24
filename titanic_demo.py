@@ -6,8 +6,8 @@ import pandas as pd
 import numpy as np
 
 ### Clean up data
-titanic_path = 'titanic_train.csv'
-titanic = pd.read_csv(titanic_path)
+titanic_train_path = 'titanic_train.csv'
+titanic = pd.read_csv(titanic_train_path)
 
 # Rename target class variable
 titanic.rename(columns={'Survived': 'class'}, inplace=True)
@@ -52,7 +52,31 @@ tpot.export('tpot_titanic_pipeline.py') # Save pipeline
 
 ### Make Predictions from Submission Data
 
+titanic_test_path = 'titanic_test.csv'
+titanic_sub = pd.read_csv(titanic_test_path)
 
+# Clean up
+for var in ['Cabin']: #,'Name','Ticket']:
+    new = list(set(titanic_sub[var]) - set(titanic[var]))
+    titanic_sub.ix[titanic_sub[var].isin(new), var] = -999
 
+titanic_sub['Sex'] = titanic_sub['Sex'].map({'male':0,'female':1})
+titanic_sub['Embarked'] = titanic_sub['Embarked'].map({'S':0,'C':1,'Q':2})
+titanic_sub = titanic_sub.fillna(-999)
 
+SubCabinTrans = mlb.fit([{str(val)} for val in titanic['Cabin'].values]).transform([{str(val)} for val in titanic_sub['Cabin'].values])
+titanic_sub = titanic_sub.drop(['Name','Ticket','Cabin'], axis=1)
 
+titanic_sub_new = np.hstack((titanic_sub.values,SubCabinTrans))
+
+# Check sub data
+assert not np.any(np.isnan(titanic_sub_new))
+assert (titanic_new.shape[1] == titanic_sub_new.shape[1]), "Not Equal"
+
+# Generate predictions
+submission = tpot.predict(titanic_sub_new)
+
+# Save predictions
+final = pd.DataFrame({'PassengerId': titanic_sub['PassengerId'], 'Survived': submission})
+final.to_csv('titanic_submission.csv', index = False)
+print(final.shape)
